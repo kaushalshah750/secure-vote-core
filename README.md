@@ -45,12 +45,12 @@ Secure Vote Core is a high-integrity, anonymous digital voting platform designed
 3. **Frontend Setup:**
 
    ```bash
-cd client
-npm install
-ng serve
+   cd client
+   npm install
+   ng serve
    ```
 
-##🔒 Security Protocols
+## 🔒 Security Protocols
 This system implements strict CORS policies, Rate Limiting, and Input Sanitization to prevent manipulation during the voting window.
 
 © 2025 Kaushal Shah. All Rights Reserved.
