@@ -104,47 +104,48 @@ app.get('/api/candidates', async (req, res) => {
     }
 });
 
-// 3. CAST VOTE (Atomic Transaction)
+// 3. CAST VOTE (Simplified & Fixed for Localhost)
 app.post('/api/vote', async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         const { voterId, candidateId } = req.body;
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-        // 1. Check Timer Again (Critical Security)
+        // 1. Check Timer
         const status = await checkElectionStatus();
         if (!status.isOpen) {
-            await session.abortTransaction();
             return res.status(403).json({ message: 'Voting Time Over!' });
         }
 
-        // 2. Lock Voter
-        const voter = await Voter.findById(voterId).session(session);
-        if (!voter || voter.hasVoted) {
-            await session.abortTransaction();
-            return res.status(403).json({ message: 'Fraud Detected: User already voted.' });
+        // 2. ATOMIC LOCK: Try to find AND update the voter in one shot.
+        // Condition: ID match hona chahiye AUR hasVoted FALSE hona chahiye.
+        // Agar hasVoted pehle se TRUE hai, toh ye 'null' return karega.
+        const voter = await Voter.findOneAndUpdate(
+            { _id: voterId, hasVoted: false }, // <--- Critical Security Check
+            { 
+                $set: { 
+                    hasVoted: true, 
+                    votedAt: new Date(), 
+                    ipAddress: ip 
+                } 
+            },
+            { new: true } // Returns the updated document
+        );
+
+        // Agar voter null mila, iska matlab usne pehle hi vote de diya tha (Race condition handled)
+        if (!voter) {
+            return res.status(403).json({ message: 'Fraud Detected: Vote already recorded.' });
         }
 
-        // 3. Update Candidate
-        await Candidate.findByIdAndUpdate(candidateId, { $inc: { voteCount: 1 } }).session(session);
+        // 3. Increment Candidate Count
+        // (Voter mark ho chuka hai, ab candidate count badha do)
+        await Candidate.findByIdAndUpdate(candidateId, { $inc: { voteCount: 1 } });
 
-        // 4. Mark Voter
-        voter.hasVoted = true;
-        voter.votedAt = new Date();
-        voter.ipAddress = ip;
-        await voter.save({ session });
-
-        await session.commitTransaction();
         res.json({ success: true, message: 'Vote Secured.' });
 
     } catch (err) {
-        await session.abortTransaction();
-        console.error(err);
-        res.status(500).json({ message: 'Transaction Failed.' });
-    } finally {
-        session.endSession();
+        console.error('Vote Error:', err);
+        // Agar Candidate update fail hua toh log kar lo, but voter mark ho chuka hai to double vote nahi hoga
+        res.status(500).json({ message: 'Server Error during voting.' });
     }
 });
 

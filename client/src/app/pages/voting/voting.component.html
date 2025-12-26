@@ -1,0 +1,75 @@
+<div class="min-h-screen bg-gray-900 pb-24">
+    
+    <div class="bg-white p-3 text-center border-b-4 border-green-600 shadow-sm relative z-10">
+        <h1 class="text-lg md:text-xl font-extrabold text-red-700 uppercase leading-none">
+            SHREE MAHESWARI BHAWAN SAMITI
+        </h1>
+        <p class="text-[10px] md:text-xs text-gray-800 font-bold mt-1">
+            CITY LIGHT ROAD, SURAT-395007
+        </p>
+    </div>
+
+    <div class="sticky top-0 z-50 bg-gray-800 border-b border-gray-700 shadow-xl px-4 py-2 flex justify-between items-center backdrop-blur-sm bg-opacity-95">
+        <div class="flex flex-col">
+            <span class="text-[10px] text-gray-400 uppercase tracking-wider">Voter</span>
+            <span class="text-white font-bold text-sm truncate max-w-[140px]">{{ voterName }}</span>
+        </div>
+        
+        <div class="flex flex-col text-right">
+            <span class="text-[10px] text-gray-400 uppercase tracking-wider">Time Left</span>
+            <span class="text-yellow-400 font-mono font-bold text-lg leading-none">{{ timeLeftString }}</span>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-6 max-w-2xl">
+        <div class="text-center mb-6">
+            <span class="bg-gray-800 text-gray-300 px-4 py-1 rounded-full text-xs font-bold border border-gray-700 uppercase tracking-wide">
+                Ordinary Members Group Election
+            </span>
+            <h2 class="text-xl text-white font-bold mt-4">Select Your Candidate</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            @for (candidate of candidates; track candidate._id) {
+                <div (click)="selectCandidate(candidate._id)"
+                    [class.border-green-500]="selectedCandidateId === candidate._id"
+                    [class.ring-2]="selectedCandidateId === candidate._id"
+                    [class.ring-green-500]="selectedCandidateId === candidate._id"
+                    [class.bg-gray-700]="selectedCandidateId === candidate._id"
+                    [class.bg-gray-800]="selectedCandidateId !== candidate._id"
+                    class="relative border border-gray-700 rounded-xl p-4 flex items-center space-x-4 cursor-pointer transition-all hover:bg-gray-700 active:scale-95 shadow-lg">
+                    
+                    <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                        [class.border-green-500]="selectedCandidateId === candidate._id"
+                        [class.border-gray-500]="selectedCandidateId !== candidate._id">
+                        <div *ngIf="selectedCandidateId === candidate._id" class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    </div>
+
+                    <!-- <img [src]="candidate.photoUrl || 'https://ui-avatars.com/api/?name='+candidate.name+'&background=random'" 
+                        class="w-14 h-14 rounded-full object-cover border-2 border-gray-500 bg-gray-600"> -->
+                    
+                    <div>
+                        <h3 class="text-white font-bold text-lg leading-tight">{{ candidate.name }}</h3>
+                        <p class="text-gray-400 text-xs mt-1 uppercase">{{ candidate.party }}</p>
+                    </div>
+                </div>
+             }
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 w-full bg-gray-900/90 backdrop-blur border-t border-gray-700 p-4 z-40">
+        <div class="max-w-2xl mx-auto">
+            <button (click)="submitVote()" 
+                [disabled]="!selectedCandidateId || !isVotingOpen || isLoading"
+                [class.opacity-50]="!selectedCandidateId || !isVotingOpen"
+                class="w-full bg-gradient-to-r from-green-700 to-green-600 hover:from-green-600 hover:to-green-500 text-white font-bold py-4 rounded-xl shadow-lg text-lg tracking-wide transition-all uppercase flex items-center justify-center gap-2">
+                
+                <span *ngIf="!isLoading">CONFIRM VOTE</span>
+                <span *ngIf="!isLoading" class="bg-white/20 p-1 rounded">🔒</span>
+                
+                <span *ngIf="isLoading">Submitting...</span>
+            </button>
+        </div>
+    </div>
+</div>
