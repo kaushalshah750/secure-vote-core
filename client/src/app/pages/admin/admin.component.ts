@@ -60,7 +60,8 @@ export class AdminComponent {
   constructor(private http: HttpClient) {}
 
   fetchResults() {
-    this.http.post<any>('http://localhost:3000/api/admin/results', { password: this.password })
+    // Sirf '/api' use kar, Nginx khud sambhal lega
+    this.http.post<any>('/api/admin/results', { password: this.password }) 
       .subscribe({
         next: (data) => {
           this.isAuthenticated = true;
