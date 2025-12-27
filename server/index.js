@@ -1,42 +1,32 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
-const { Candidate, Voter, Config } = require('./models/schemas');
+const { sequelize, Voter, Candidate, Config } = require('./models/sql-models');
+const { Op } = require('sequelize'); // Sequelize operators
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security Middleware
 app.use(helmet());
-app.use(cors()); // Production mein isko restrict karenge
+app.use(cors());
 app.use(express.json());
-app.use(morgan('dev')); // Logs requests
 
-// Database Connection
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/secure_vote_db')
-    .then(() => console.log('✅ MongoDB Connected'))
-    .catch(err => console.error('❌ DB Error:', err));
-
-// --- HELPER FUNCTIONS ---
-
-// Check if Election is Active
+// --- HELPER: CHECK TIMER ---
 async function checkElectionStatus() {
-    // Default: Ends 24 hours from now if not set
-    let config = await Config.findOne({ key: 'ELECTION_CONFIG' });
+    let config = await Config.findOne({ where: { key: 'ELECTION_CONFIG' } });
+    
+    // First Run Setup
     if (!config) {
-        // First run setup (Auto-create 6 PM deadline for testing)
         const tomorrowSixPM = new Date();
-        tomorrowSixPM.setHours(18, 0, 0, 0); 
+        tomorrowSixPM.setDate(tomorrowSixPM.getDate() + 1);
+        tomorrowSixPM.setHours(18, 0, 0, 0);
         config = await Config.create({ 
             key: 'ELECTION_CONFIG', 
-            endTime: tomorrowSixPM,
-            isActive: true 
+            endTime: tomorrowSixPM 
         });
     }
-    
+
     const now = new Date();
     if (now > config.endTime || !config.isActive) {
         return { isOpen: false, message: 'Voting has ended.' };
@@ -44,112 +34,94 @@ async function checkElectionStatus() {
     return { isOpen: true, endTime: config.endTime };
 }
 
-// --- API ROUTES ---
+// --- PUBLIC ROUTES ---
 
-// 1. Login (Phone + PIN)
+// 1. Login (MySQL Version)
 app.post('/api/login', async (req, res) => {
     try {
         const { phone, name } = req.body;
-
-        // Check Timer
         const status = await checkElectionStatus();
         if (!status.isOpen) return res.status(403).json({ message: status.message });
 
-        // Step 1: Phone number se user dhoondo
-        const voter = await Voter.findOne({ phone });
+        const voter = await Voter.findOne({ where: { phone } });
         
-        if (!voter) {
-            return res.status(401).json({ message: 'Mobile number not found in list.' });
+        if (!voter) return res.status(401).json({ message: 'Mobile number not found.' });
+
+        // Name Match (Case Insensitive)
+        if (voter.name.trim().toLowerCase() !== name.trim().toLowerCase()) {
+            return res.status(401).json({ message: 'Name mismatch. Check spelling.' });
         }
 
-        // Step 2: Name Match (Case Insensitive)
-        // User "rahul" likhe aur DB mein "RAHUL" ho toh bhi chalna chahiye
-        const dbName = voter.name.trim().toLowerCase();
-        const inputName = name.trim().toLowerCase();
+        if (voter.hasVoted) return res.status(403).json({ message: 'Vote already recorded.' });
 
-        if (dbName !== inputName) {
-            return res.status(401).json({ 
-                message: 'Name does not match our records. Please enter exact full name.' 
-            });
-        }
-
-        if (voter.hasVoted) {
-            return res.status(403).json({ 
-                message: `Vote already recorded for ${voter.name}` 
-            });
-        }
-
-        // Success
-        res.json({ 
-            success: true, 
-            voterId: voter._id, 
-            name: voter.name,
-            endTime: status.endTime 
-        });
+        res.json({ success: true, voterId: voter.id, name: voter.name, endTime: status.endTime });
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Server Error' });
+        res.status(500).json({ error: 'Login Error' });
     }
 });
 
-// 2. Get Candidates (Secure List)
+// 2. Get Candidates
 app.get('/api/candidates', async (req, res) => {
-    try {
-        // Sirf Name aur Photo bhejenge, Vote Count NAHI
-        const candidates = await Candidate.find({}, 'name party photoUrl');
-        res.json(candidates);
-    } catch (err) {
-        res.status(500).json({ error: 'Server Error' });
-    }
+    const candidates = await Candidate.findAll({
+        attributes: ['id', 'name', 'party', 'photoUrl'] // Hiding voteCount
+    });
+    res.json(candidates);
 });
 
-// 3. CAST VOTE (Simplified & Fixed for Localhost)
+// 3. Vote (Atomic MySQL Update)
 app.post('/api/vote', async (req, res) => {
     try {
         const { voterId, candidateId } = req.body;
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-        // 1. Check Timer
         const status = await checkElectionStatus();
-        if (!status.isOpen) {
-            return res.status(403).json({ message: 'Voting Time Over!' });
-        }
+        if (!status.isOpen) return res.status(403).json({ message: 'Time Over' });
 
-        // 2. ATOMIC LOCK: Try to find AND update the voter in one shot.
-        // Condition: ID match hona chahiye AUR hasVoted FALSE hona chahiye.
-        // Agar hasVoted pehle se TRUE hai, toh ye 'null' return karega.
-        const voter = await Voter.findOneAndUpdate(
-            { _id: voterId, hasVoted: false }, // <--- Critical Security Check
-            { 
-                $set: { 
-                    hasVoted: true, 
-                    votedAt: new Date(), 
-                    ipAddress: ip 
-                } 
-            },
-            { new: true } // Returns the updated document
+        // ATOMIC UPDATE: Only update if hasVoted is false
+        const [updatedRows] = await Voter.update(
+            { hasVoted: true, votedAt: new Date(), ipAddress: ip },
+            { where: { id: voterId, hasVoted: false } }
         );
 
-        // Agar voter null mila, iska matlab usne pehle hi vote de diya tha (Race condition handled)
-        if (!voter) {
-            return res.status(403).json({ message: 'Fraud Detected: Vote already recorded.' });
+        if (updatedRows === 0) {
+            return res.status(403).json({ message: 'Already Voted!' });
         }
 
-        // 3. Increment Candidate Count
-        // (Voter mark ho chuka hai, ab candidate count badha do)
-        await Candidate.findByIdAndUpdate(candidateId, { $inc: { voteCount: 1 } });
-
-        res.json({ success: true, message: 'Vote Secured.' });
+        await Candidate.increment('voteCount', { where: { id: candidateId } });
+        res.json({ success: true });
 
     } catch (err) {
-        console.error('Vote Error:', err);
-        // Agar Candidate update fail hua toh log kar lo, but voter mark ho chuka hai to double vote nahi hoga
-        res.status(500).json({ message: 'Server Error during voting.' });
+        console.error(err);
+        res.status(500).json({ message: 'Vote Failed' });
     }
 });
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`🚀 Secure Vote Engine running on Port ${PORT}`);
+// --- ADMIN ROUTES (NEW) ---
+// Secure this with a hardcoded password for now
+app.post('/api/admin/results', async (req, res) => {
+    const { password } = req.body;
+    if (password !== 'Admin@123') { // Simple protection
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const results = await Candidate.findAll({
+        order: [['voteCount', 'DESC']]
+    });
+    
+    const stats = {
+        totalVoters: await Voter.count(),
+        totalVoted: await Voter.count({ where: { hasVoted: true } })
+    };
+
+    res.json({ results, stats });
 });
+
+// DB Connect & Start
+sequelize.authenticate()
+    .then(() => {
+        console.log('✅ MySQL Connected');
+        app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
+    })
+    .catch(err => console.error('❌ DB Error:', err));

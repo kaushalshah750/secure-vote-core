@@ -34,13 +34,22 @@
                 <button (click)="onLogin()" [disabled]="isLoading" 
                     class="w-full bg-green-700 hover:bg-green-600 text-white font-bold py-4 rounded-lg shadow-lg text-lg tracking-wide transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-2">
                     <span *ngIf="!isLoading">LOGIN TO VOTE</span>
-                    <span *ngIf="isLoading">Verifying Member...</span>
+                    <span *ngIf="isLoading" class="flex items-center justify-center gap-2">
+                        <svg class="animate-spin h-5 w-5 text-white" ...></svg> Verifying with Sparqal Server...
+                    </span>
                 </button>
             </div>
 
-            <p class="text-xs text-center text-gray-500 mt-6">
-                Official Secure Voting Portal • Surat
-            </p>
+            <div class="mt-6 border-t border-gray-700 pt-4 text-center">
+                <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">
+                    Technology Partner
+                </p>
+                <a href="https://www.mrkaushalshah.com" target="_blank" 
+                   class="inline-flex items-center space-x-2 opacity-70 hover:opacity-100 transition-opacity no-underline">
+                    <span class="text-white font-bold tracking-wide text-sm">SPARQAL</span>
+                    <span class="text-green-500 text-xs">●</span>
+                    <span class="text-gray-400 text-xs">Digital</span>
+                </a>
+            </div>
         </div>
     </div>
-</div>

@@ -31,19 +31,19 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            @for (candidate of candidates; track candidate._id) {
-                <div (click)="selectCandidate(candidate._id)"
-                    [class.border-green-500]="selectedCandidateId === candidate._id"
-                    [class.ring-2]="selectedCandidateId === candidate._id"
-                    [class.ring-green-500]="selectedCandidateId === candidate._id"
-                    [class.bg-gray-700]="selectedCandidateId === candidate._id"
-                    [class.bg-gray-800]="selectedCandidateId !== candidate._id"
+            @for (candidate of candidates; track candidate.id) {
+                <div (click)="selectCandidate(candidate.id)"
+                    [class.border-green-500]="selectedCandidateId === candidate.id"
+                    [class.ring-2]="selectedCandidateId === candidate.id"
+                    [class.ring-green-500]="selectedCandidateId === candidate.id"
+                    [class.bg-gray-700]="selectedCandidateId === candidate.id"
+                    [class.bg-gray-800]="selectedCandidateId !== candidate.id"
                     class="relative border border-gray-700 rounded-xl p-4 flex items-center space-x-4 cursor-pointer transition-all hover:bg-gray-700 active:scale-95 shadow-lg">
                     
                     <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                        [class.border-green-500]="selectedCandidateId === candidate._id"
-                        [class.border-gray-500]="selectedCandidateId !== candidate._id">
-                        <div *ngIf="selectedCandidateId === candidate._id" class="w-3 h-3 bg-green-500 rounded-full"></div>
+                        [class.border-green-500]="selectedCandidateId === candidate.id"
+                        [class.border-gray-500]="selectedCandidateId !== candidate.id">
+                        <div *ngIf="selectedCandidateId === candidate.id" class="w-3 h-3 bg-green-500 rounded-full"></div>
                     </div>
 
                     <!-- <img [src]="candidate.photoUrl || 'https://ui-avatars.com/api/?name='+candidate.name+'&background=random'" 
